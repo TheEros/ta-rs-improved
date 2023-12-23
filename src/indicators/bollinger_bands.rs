@@ -1,57 +1,21 @@
+use chrono::{DateTime, Duration, Utc};
+use std::collections::VecDeque;
 use std::fmt;
 
 use crate::errors::Result;
 use crate::indicators::StandardDeviation as Sd;
-use crate::{Close, Next, Period, Reset};
+use crate::{Next, Reset};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// A Bollinger Bands (BB).
-/// (BB).
-/// It is a type of infinite impulse response filter that calculates Bollinger Bands using Exponential Moving Average.
-/// The Bollinger Bands are represented by Average EMA and standard deviaton that is moved 'k' times away in both directions from calculated average value.
-///
-/// # Formula
-///
-/// See SMA, SD documentation.
-///
-/// BB is composed as:
-///
-///  * _BB<sub>Middle Band</sub>_ - Simple Moving Average (SMA).
-///  * _BB<sub>Upper Band</sub>_ = SMA + SD of observation * multipler (usually 2.0)
-///  * _BB<sub>Lower Band</sub>_ = SMA - SD of observation * multipler (usually 2.0)
-///
-/// # Example
-///
-///```
-/// use ta::indicators::{BollingerBands, BollingerBandsOutput};
-/// use ta::Next;
-///
-/// let mut bb = BollingerBands::new(3, 2.0_f64).unwrap();
-///
-/// let out_0 = bb.next(2.0);
-///
-/// let out_1 = bb.next(5.0);
-///
-/// assert_eq!(out_0.average, 2.0);
-/// assert_eq!(out_0.upper, 2.0);
-/// assert_eq!(out_0.lower, 2.0);
-///
-/// assert_eq!(out_1.average, 3.5);
-/// assert_eq!(out_1.upper, 6.5);
-/// assert_eq!(out_1.lower, 0.5);
-/// ```
-///
-/// # Links
-///
-/// * [Bollinger Bands, Wikipedia](https://en.wikipedia.org/wiki/Bollinger_Bands)
 #[doc(alias = "BB")]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone)]
 pub struct BollingerBands {
-    period: usize,
+    duration: Duration,
     multiplier: f64,
     sd: Sd,
+    window: VecDeque<(DateTime<Utc>, f64)>, // Store tuples of (timestamp, value)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -62,45 +26,48 @@ pub struct BollingerBandsOutput {
 }
 
 impl BollingerBands {
-    pub fn new(period: usize, multiplier: f64) -> Result<Self> {
+    pub fn new(duration: Duration, multiplier: f64) -> Result<Self> {
+        if duration.num_seconds() <= 0 {
+            return Err(crate::errors::TaError::InvalidParameter);
+        }
         Ok(Self {
-            period,
+            duration,
             multiplier,
-            sd: Sd::new(period)?,
+            sd: Sd::new(duration)?, // We will manage the period dynamically
+            window: VecDeque::new(),
         })
     }
 
     pub fn multiplier(&self) -> f64 {
         self.multiplier
     }
-}
 
-impl Period for BollingerBands {
-    fn period(&self) -> usize {
-        self.period
-    }
-}
-
-impl Next<f64> for BollingerBands {
-    type Output = BollingerBandsOutput;
-
-    fn next(&mut self, input: f64) -> Self::Output {
-        let sd = self.sd.next(input);
-        let mean = self.sd.mean();
-
-        Self::Output {
-            average: mean,
-            upper: mean + sd * self.multiplier,
-            lower: mean - sd * self.multiplier,
+    fn remove_old_data(&mut self, current_time: DateTime<Utc>) {
+        while self
+            .window
+            .front()
+            .map_or(false, |(time, _)| *time <= current_time - self.duration)
+        {
+            self.window.pop_front();
         }
     }
 }
 
-impl<T: Close> Next<&T> for BollingerBands {
-    type Output = BollingerBandsOutput;
+impl Next<f64> for BollingerBands {
+    type Output = f64;
 
-    fn next(&mut self, input: &T) -> Self::Output {
-        self.next(input.close())
+    fn next(&mut self, (timestamp, value): (DateTime<Utc>, f64)) -> Self::Output {
+        // Remove data points that are older than our duration
+        self.remove_old_data(timestamp);
+
+        // Add the new data point
+        self.window.push_back((timestamp, value));
+
+        // Calculate the mean and standard deviation based on the current window
+        let values: Vec<f64> = self.window.iter().map(|&(_, val)| val).collect();
+        let mean = values.iter().sum::<f64>() / values.len() as f64;
+        let sd = self.sd.next((timestamp, value));
+        mean + sd * self.multiplier
     }
 }
 
@@ -112,13 +79,13 @@ impl Reset for BollingerBands {
 
 impl Default for BollingerBands {
     fn default() -> Self {
-        Self::new(9, 2_f64).unwrap()
+        Self::new(Duration::days(14), 2_f64).unwrap()
     }
 }
 
 impl fmt::Display for BollingerBands {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "BB({}, {})", self.period, self.multiplier)
+        write!(f, "BB({}, {})", self.duration, self.multiplier)
     }
 }
 
@@ -126,66 +93,53 @@ impl fmt::Display for BollingerBands {
 mod tests {
     use super::*;
     use crate::test_helper::*;
+    use chrono::{Duration, Utc};
 
     test_indicator!(BollingerBands);
 
     #[test]
     fn test_new() {
-        assert!(BollingerBands::new(0, 2_f64).is_err());
-        assert!(BollingerBands::new(1, 2_f64).is_ok());
-        assert!(BollingerBands::new(2, 2_f64).is_ok());
+        assert!(BollingerBands::new(Duration::days(0), 2_f64).is_err());
+        assert!(BollingerBands::new(Duration::days(1), 2_f64).is_ok());
+        assert!(BollingerBands::new(Duration::days(2), 2_f64).is_ok());
     }
 
     #[test]
     fn test_next() {
-        let mut bb = BollingerBands::new(3, 2.0_f64).unwrap();
+        let mut bb = BollingerBands::new(Duration::days(3), 2.0).unwrap();
+        let now = Utc::now();
 
-        let a = bb.next(2.0);
-        let b = bb.next(5.0);
-        let c = bb.next(1.0);
-        let d = bb.next(6.25);
+        let a = bb.next((now, 2.0));
+        let b = bb.next((now + Duration::days(1), 5.0));
+        let c = bb.next((now + Duration::days(2), 1.0));
+        let d = bb.next((now + Duration::days(3), 6.25));
 
-        assert_eq!(round(a.average), 2.0);
-        assert_eq!(round(b.average), 3.5);
-        assert_eq!(round(c.average), 2.667);
-        assert_eq!(round(d.average), 4.083);
-
-        assert_eq!(round(a.upper), 2.0);
-        assert_eq!(round(b.upper), 6.5);
-        assert_eq!(round(c.upper), 6.066);
-        assert_eq!(round(d.upper), 8.562);
-
-        assert_eq!(round(a.lower), 2.0);
-        assert_eq!(round(b.lower), 0.5);
-        assert_eq!(round(c.lower), -0.733);
-        assert_eq!(round(d.lower), -0.395);
+        assert_eq!(round(a), 2.0);
+        assert_eq!(round(b), 6.5);
+        assert_eq!(round(c), 6.066);
+        assert_eq!(round(d), 8.562);
     }
 
     #[test]
     fn test_reset() {
-        let mut bb = BollingerBands::new(5, 2.0_f64).unwrap();
+        let mut bb = BollingerBands::new(Duration::days(5), 2.0_f64).unwrap();
+        let now = Utc::now();
 
-        let out = bb.next(3.0);
+        let out = bb.next((now, 3.0));
 
-        assert_eq!(out.average, 3.0);
-        assert_eq!(out.upper, 3.0);
-        assert_eq!(out.lower, 3.0);
+        assert_eq!(out, 3.0);
 
-        bb.next(2.5);
-        bb.next(3.5);
-        bb.next(4.0);
+        bb.next((now + Duration::days(1), 2.5));
+        bb.next((now + Duration::days(2), 3.5));
+        bb.next((now + Duration::days(3), 4.0));
 
-        let out = bb.next(2.0);
+        let out = bb.next((now + Duration::days(4), 2.0));
 
-        assert_eq!(out.average, 3.0);
-        assert_eq!(round(out.upper), 4.414);
-        assert_eq!(round(out.lower), 1.586);
+        assert_eq!(round(out), 4.414);
 
         bb.reset();
-        let out = bb.next(3.0);
-        assert_eq!(out.average, 3.0);
-        assert_eq!(out.upper, 3.0);
-        assert_eq!(out.lower, 3.0);
+        let out = bb.next((now, 3.0));
+        assert_eq!(out, 3.0);
     }
 
     #[test]
@@ -195,7 +149,8 @@ mod tests {
 
     #[test]
     fn test_display() {
-        let bb = BollingerBands::new(10, 3.0_f64).unwrap();
-        assert_eq!(format!("{}", bb), "BB(10, 3)");
+        let duration = Duration::days(10);
+        let bb = BollingerBands::new(duration, 3.0_f64).unwrap();
+        assert_eq!(format!("{}", bb), format!("BB({}, 3)", duration));
     }
 }

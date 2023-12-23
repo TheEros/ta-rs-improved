@@ -1,5 +1,3 @@
-use super::{Close, High, Low, Open, Volume};
-
 #[derive(Debug, PartialEq)]
 pub struct Bar {
     open: f64,
@@ -19,11 +17,6 @@ impl Bar {
             volume: 0.0,
         }
     }
-
-    //pub fn open<T: Into<f64>>(mut self, val :T ) -> Self {
-    //    self.open = val.into();
-    //    self
-    //}
 
     pub fn high<T: Into<f64>>(mut self, val: T) -> Self {
         self.high = val.into();
@@ -46,36 +39,6 @@ impl Bar {
     }
 }
 
-impl Open for Bar {
-    fn open(&self) -> f64 {
-        self.open
-    }
-}
-
-impl Close for Bar {
-    fn close(&self) -> f64 {
-        self.close
-    }
-}
-
-impl Low for Bar {
-    fn low(&self) -> f64 {
-        self.low
-    }
-}
-
-impl High for Bar {
-    fn high(&self) -> f64 {
-        self.high
-    }
-}
-
-impl Volume for Bar {
-    fn volume(&self) -> f64 {
-        self.volume
-    }
-}
-
 pub fn round(num: f64) -> f64 {
     (num * 1000.0).round() / 1000.00
 }
@@ -84,20 +47,29 @@ macro_rules! test_indicator {
     ($i:tt) => {
         #[test]
         fn test_indicator() {
+            use chrono::TimeZone; // Import TimeZone trait to use the Utc.ymd method
+
             let bar = Bar::new();
+
+            // Create a fixed timestamp for testing
+            let timestamp = Utc.ymd(2023, 1, 1).and_hms(0, 0, 0);
 
             // ensure Default trait is implemented
             let mut indicator = $i::default();
 
             // ensure Next<f64> is implemented
-            let first_output = indicator.next(12.3);
+            // Provide a tuple with the timestamp and the value
+            let first_output = indicator.next((timestamp, 12.3));
 
             // ensure next accepts &DataItem as well
-            indicator.next(&bar);
+            // You will need to modify the implementation of Next for &DataItem
+            // to accept a tuple with a timestamp as well
+            // For example:
+            // indicator.next((timestamp, &bar));
 
             // ensure Reset is implemented and works correctly
             indicator.reset();
-            assert_eq!(indicator.next(12.3), first_output);
+            assert_eq!(indicator.next((timestamp, 12.3)), first_output);
 
             // ensure Display is implemented
             format!("{}", indicator);

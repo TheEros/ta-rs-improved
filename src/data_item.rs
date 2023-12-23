@@ -1,5 +1,4 @@
 use crate::errors::*;
-use crate::traits::{Close, High, Low, Open, Volume};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -41,36 +40,6 @@ pub struct DataItem {
 impl DataItem {
     pub fn builder() -> DataItemBuilder {
         DataItemBuilder::new()
-    }
-}
-
-impl Open for DataItem {
-    fn open(&self) -> f64 {
-        self.open
-    }
-}
-
-impl High for DataItem {
-    fn high(&self) -> f64 {
-        self.high
-    }
-}
-
-impl Low for DataItem {
-    fn low(&self) -> f64 {
-        self.low
-    }
-}
-
-impl Close for DataItem {
-    fn close(&self) -> f64 {
-        self.close
-    }
-}
-
-impl Volume for DataItem {
-    fn volume(&self) -> f64 {
-        self.volume
     }
 }
 

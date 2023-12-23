@@ -1,141 +1,80 @@
+use std::collections::VecDeque;
 use std::fmt;
 
 use crate::errors::Result;
 use crate::indicators::ExponentialMovingAverage as Ema;
-use crate::{Close, Next, Period, Reset};
+use crate::{Next, Reset};
+use chrono::{DateTime, Duration, Utc};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// The relative strength index (RSI).
-///
-/// It is a momentum oscillator,
-/// that compares the magnitude of recent gains
-/// and losses over a specified time period to measure speed and change of price
-/// movements of a security. It is primarily used to attempt to identify
-/// overbought or oversold conditions in the trading of an asset.
-///
-/// The oscillator returns output in the range of 0..100.
-///
-/// ![RSI](https://upload.wikimedia.org/wikipedia/commons/6/67/RSIwiki.gif)
-///
-/// # Formula
-///
-/// RSI<sub>t</sub> = EMA<sub>Ut</sub> * 100 / (EMA<sub>Ut</sub> + EMA<sub>Dt</sub>)
-///
-/// Where:
-///
-/// * RSI<sub>t</sub> - value of RSI indicator in a moment of time _t_
-/// * EMA<sub>Ut</sub> - value of [EMA](struct.ExponentialMovingAverage.html) of up periods in a moment of time _t_
-/// * EMA<sub>Dt</sub> - value of [EMA](struct.ExponentialMovingAverage.html) of down periods in a moment of time _t_
-///
-/// If current period has value higher than previous period, than:
-///
-/// U = p<sub>t</sub> - p<sub>t-1</sub>
-///
-/// D = 0
-///
-/// Otherwise:
-///
-/// U = 0
-///
-/// D = p<sub>t-1</sub> - p<sub>t</sub>
-///
-/// Where:
-///
-/// * U = up period value
-/// * D = down period value
-/// * p<sub>t</sub> - input value in a moment of time _t_
-/// * p<sub>t-1</sub> - input value in a moment of time _t-1_
-///
-/// # Parameters
-///
-/// * _period_ - number of periods (integer greater than 0). Default value is 14.
-///
-/// # Example
-///
-/// ```
-/// use ta::indicators::RelativeStrengthIndex;
-/// use ta::Next;
-///
-/// let mut rsi = RelativeStrengthIndex::new(3).unwrap();
-/// assert_eq!(rsi.next(10.0), 50.0);
-/// assert_eq!(rsi.next(10.5).round(), 86.0);
-/// assert_eq!(rsi.next(10.0).round(), 35.0);
-/// assert_eq!(rsi.next(9.5).round(), 16.0);
-/// ```
-///
-/// # Links
-/// * [Relative strength index (Wikipedia)](https://en.wikipedia.org/wiki/Relative_strength_index)
-/// * [RSI (Investopedia)](http://www.investopedia.com/terms/r/rsi.asp)
-///
 #[doc(alias = "RSI")]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone)]
 pub struct RelativeStrengthIndex {
-    period: usize,
+    duration: Duration,
     up_ema_indicator: Ema,
     down_ema_indicator: Ema,
-    prev_val: f64,
-    is_new: bool,
+    window: VecDeque<(DateTime<Utc>, f64)>, // Store tuples of (timestamp, value)
+    prev_val: Option<f64>,
 }
 
 impl RelativeStrengthIndex {
-    pub fn new(period: usize) -> Result<Self> {
+    pub fn new(duration: Duration) -> Result<Self> {
         Ok(Self {
-            period,
-            up_ema_indicator: Ema::new(period)?,
-            down_ema_indicator: Ema::new(period)?,
-            prev_val: 0.0,
-            is_new: true,
+            duration,
+            up_ema_indicator: Ema::new(duration)?,
+            down_ema_indicator: Ema::new(duration)?,
+            window: VecDeque::new(),
+            prev_val: None,
         })
     }
-}
 
-impl Period for RelativeStrengthIndex {
-    fn period(&self) -> usize {
-        self.period
+    fn remove_old_data(&mut self, current_time: DateTime<Utc>) {
+        while self
+            .window
+            .front()
+            .map_or(false, |(time, _)| *time <= current_time - self.duration)
+        {
+            self.window.pop_front();
+        }
     }
 }
 
 impl Next<f64> for RelativeStrengthIndex {
     type Output = f64;
 
-    fn next(&mut self, input: f64) -> Self::Output {
+    fn next(&mut self, (timestamp, value): (DateTime<Utc>, f64)) -> Self::Output {
+        self.remove_old_data(timestamp);
+        self.window.push_back((timestamp, value));
+
         let mut up = 0.0;
         let mut down = 0.0;
 
-        if self.is_new {
-            self.is_new = false;
-            // Initialize with some small seed numbers to avoid division by zero
-            up = 0.1;
-            down = 0.1;
-        } else {
-            if input > self.prev_val {
-                up = input - self.prev_val;
+        if let Some(prev_val) = self.prev_val {
+            if value > prev_val {
+                up = value - prev_val;
             } else {
-                down = self.prev_val - input;
+                down = prev_val - value;
             }
         }
 
-        self.prev_val = input;
-        let up_ema = self.up_ema_indicator.next(up);
-        let down_ema = self.down_ema_indicator.next(down);
-        100.0 * up_ema / (up_ema + down_ema)
-    }
-}
+        self.prev_val = Some(value);
+        let up_ema = self.up_ema_indicator.next((timestamp, up));
+        let down_ema = self.down_ema_indicator.next((timestamp, down));
 
-impl<T: Close> Next<&T> for RelativeStrengthIndex {
-    type Output = f64;
-
-    fn next(&mut self, input: &T) -> Self::Output {
-        self.next(input.close())
+        if up_ema + down_ema == 0.0 {
+            50.0 // To avoid division by zero, return a neutral value
+        } else {
+            100.0 * up_ema / (up_ema + down_ema)
+        }
     }
 }
 
 impl Reset for RelativeStrengthIndex {
     fn reset(&mut self) {
-        self.is_new = true;
-        self.prev_val = 0.0;
+        self.window.clear();
+        self.prev_val = None;
         self.up_ema_indicator.reset();
         self.down_ema_indicator.reset();
     }
@@ -143,13 +82,13 @@ impl Reset for RelativeStrengthIndex {
 
 impl Default for RelativeStrengthIndex {
     fn default() -> Self {
-        Self::new(14).unwrap()
+        Self::new(Duration::days(14)).unwrap()
     }
 }
 
 impl fmt::Display for RelativeStrengthIndex {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "RSI({})", self.period)
+        write!(f, "RSI({:?} days)", self.duration.num_days())
     }
 }
 
@@ -157,33 +96,48 @@ impl fmt::Display for RelativeStrengthIndex {
 mod tests {
     use super::*;
     use crate::test_helper::*;
+    use chrono::{TimeZone, Utc};
 
     test_indicator!(RelativeStrengthIndex);
 
     #[test]
     fn test_new() {
-        assert!(RelativeStrengthIndex::new(0).is_err());
-        assert!(RelativeStrengthIndex::new(1).is_ok());
+        assert!(RelativeStrengthIndex::new(Duration::days(0)).is_err());
+        assert!(RelativeStrengthIndex::new(Duration::days(1)).is_ok());
     }
 
     #[test]
     fn test_next() {
-        let mut rsi = RelativeStrengthIndex::new(3).unwrap();
-        assert_eq!(rsi.next(10.0), 50.0);
-        assert_eq!(rsi.next(10.5).round(), 86.0);
-        assert_eq!(rsi.next(10.0).round(), 35.0);
-        assert_eq!(rsi.next(9.5).round(), 16.0);
+        let mut rsi = RelativeStrengthIndex::new(Duration::days(3)).unwrap();
+        let timestamp = Utc.ymd(2020, 1, 1).and_hms(0, 0, 0);
+        assert_eq!(rsi.next((timestamp, 10.0)), 50.0);
+        assert_eq!(
+            rsi.next((timestamp + Duration::days(1), 10.5)).round(),
+            86.0
+        );
+        assert_eq!(
+            rsi.next((timestamp + Duration::days(2), 10.0)).round(),
+            35.0
+        );
+        assert_eq!(rsi.next((timestamp + Duration::days(3), 9.5)).round(), 16.0);
     }
 
     #[test]
     fn test_reset() {
-        let mut rsi = RelativeStrengthIndex::new(3).unwrap();
-        assert_eq!(rsi.next(10.0), 50.0);
-        assert_eq!(rsi.next(10.5).round(), 86.0);
+        let mut rsi = RelativeStrengthIndex::new(Duration::days(3)).unwrap();
+        let timestamp = Utc.ymd(2020, 1, 1).and_hms(0, 0, 0);
+        assert_eq!(rsi.next((timestamp, 10.0)), 50.0);
+        assert_eq!(
+            rsi.next((timestamp + Duration::days(1), 10.5)).round(),
+            86.0
+        );
 
         rsi.reset();
-        assert_eq!(rsi.next(10.0).round(), 50.0);
-        assert_eq!(rsi.next(10.5).round(), 86.0);
+        assert_eq!(rsi.next((timestamp, 10.0)).round(), 50.0);
+        assert_eq!(
+            rsi.next((timestamp + Duration::days(1), 10.5)).round(),
+            86.0
+        );
     }
 
     #[test]
@@ -193,7 +147,7 @@ mod tests {
 
     #[test]
     fn test_display() {
-        let rsi = RelativeStrengthIndex::new(16).unwrap();
-        assert_eq!(format!("{}", rsi), "RSI(16)");
+        let rsi = RelativeStrengthIndex::new(Duration::days(16)).unwrap();
+        assert_eq!(format!("{}", rsi), "RSI(16 days)");
     }
 }
