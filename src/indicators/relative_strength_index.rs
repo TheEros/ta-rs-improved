@@ -34,7 +34,7 @@ impl RelativeStrengthIndex {
         while self
             .window
             .front()
-            .map_or(false, |(time, _)| *time <= current_time - self.duration)
+            .map_or(false, |(time, _)| *time < current_time - self.duration)
         {
             self.window.pop_front();
         }
@@ -45,28 +45,40 @@ impl Next<f64> for RelativeStrengthIndex {
     type Output = f64;
 
     fn next(&mut self, (timestamp, value): (DateTime<Utc>, f64)) -> Self::Output {
+        // Remove data outside of the duration window
         self.remove_old_data(timestamp);
+
+        // Calculate gain and loss
+        let (gain, loss) = if let Some(prev_val) = self.prev_val {
+            if value > prev_val {
+                (value - prev_val, 0.0)
+            } else {
+                (0.0, prev_val - value)
+            }
+        } else {
+            (0.0, 0.0)
+        };
+
+        // Update previous value
+        self.prev_val = Some(value);
+
+        // Add to window
         self.window.push_back((timestamp, value));
 
-        let mut up = 0.0;
-        let mut down = 0.0;
+        // Update EMAs
+        let avg_up = self.up_ema_indicator.next((timestamp, gain));
+        let avg_down = self.down_ema_indicator.next((timestamp, loss));
 
-        if let Some(prev_val) = self.prev_val {
-            if value > prev_val {
-                up = value - prev_val;
+        // Calculate and return RSI
+        if avg_down == 0.0 {
+            if avg_up == 0.0 {
+                50.0 // Neutral value when no movement
             } else {
-                down = prev_val - value;
+                100.0 // Max value when only gains
             }
-        }
-
-        self.prev_val = Some(value);
-        let up_ema = self.up_ema_indicator.next((timestamp, up));
-        let down_ema = self.down_ema_indicator.next((timestamp, down));
-
-        if up_ema + down_ema == 0.0 {
-            50.0 // To avoid division by zero, return a neutral value
         } else {
-            100.0 * up_ema / (up_ema + down_ema)
+            let rs = avg_up / avg_down;
+            100.0 - (100.0 / (1.0 + rs))
         }
     }
 }
@@ -113,13 +125,13 @@ mod tests {
         assert_eq!(rsi.next((timestamp, 10.0)), 50.0);
         assert_eq!(
             rsi.next((timestamp + Duration::days(1), 10.5)).round(),
-            86.0
+            100.0
         );
         assert_eq!(
             rsi.next((timestamp + Duration::days(2), 10.0)).round(),
-            35.0
+            50.0
         );
-        assert_eq!(rsi.next((timestamp + Duration::days(3), 9.5)).round(), 16.0);
+        assert_eq!(rsi.next((timestamp + Duration::days(3), 9.5)).round(), 33.0);
     }
 
     #[test]
@@ -129,14 +141,14 @@ mod tests {
         assert_eq!(rsi.next((timestamp, 10.0)), 50.0);
         assert_eq!(
             rsi.next((timestamp + Duration::days(1), 10.5)).round(),
-            86.0
+            100.0
         );
 
         rsi.reset();
         assert_eq!(rsi.next((timestamp, 10.0)).round(), 50.0);
         assert_eq!(
             rsi.next((timestamp + Duration::days(1), 10.5)).round(),
-            86.0
+            100.0
         );
     }
 
