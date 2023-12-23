@@ -2,10 +2,20 @@
 
 Technical analysis library for Rust.
 
+- [Introduction](#introduction)
 - [Getting started](#getting-started)
 - [Basic ideas](#basic-ideas)
 - [List of indicators](#list-of-indicators)
 - [Contributors](#contributors)
+
+## Introduction
+This is ta-rs-improved, an improved version of the technical indicator library in Rust. There are two notable changes that makes this
+application improved.
+
+- Dynamic Window Sizes. This means you can do a 30 day SMA and a 15 hour SMA.
+- **Correct calculation of the Relative Strength Index (RSI)**
+
+For more information about this repository, [read the following article.](https://nexustrade.io/blog/i-used-an-ai-to-fix-a-major-bug-in-a-very-popular-open-source-technical-indicator-library-20231223)
 
 ## Getting started
 
