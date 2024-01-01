@@ -15,6 +15,8 @@ application improved.
 - Dynamic Window Sizes. This means you can do a 30 day SMA and a 15 hour SMA.
 - **Correct calculation of the Relative Strength Index (RSI)**
 
+This library is used to power [NexusTrade](https://nexustrade.io/), an AI-Powered automated investing research platform. NexusTrade allows even non-technical users to perform financial research, create automated strategies, and optimize those strategies with an easy-to-use UI. Users can then deploy their strategies live to the market with the click of a button.
+
 For more information about this repository, [read the following article.](https://nexustrade.io/blog/i-used-an-ai-to-fix-a-major-bug-in-a-very-popular-open-source-technical-indicator-library-20231223)
 
 ## Getting started
