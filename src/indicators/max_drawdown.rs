@@ -81,6 +81,12 @@ impl fmt::Display for MaxDrawdown {
     }
 }
 
+impl Default for MaxDrawdown {
+    fn default() -> Self {
+        Self::new(Duration::days(14)).unwrap()
+    }
+}
+
 mod tests {
     use chrono::TimeZone;
 

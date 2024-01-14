@@ -89,7 +89,7 @@ impl Reset for StandardDeviation {
 
 impl Default for StandardDeviation {
     fn default() -> Self {
-        Self::new(Duration::days(9)).unwrap()
+        Self::new(Duration::days(14)).unwrap()
     }
 }
 

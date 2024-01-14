@@ -72,7 +72,7 @@ impl Reset for ExponentialMovingAverage {
 
 impl Default for ExponentialMovingAverage {
     fn default() -> Self {
-        Self::new(Duration::days(9)).unwrap()
+        Self::new(Duration::days(14)).unwrap()
     }
 }
 

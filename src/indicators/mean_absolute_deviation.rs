@@ -75,7 +75,7 @@ impl Reset for MeanAbsoluteDeviation {
 
 impl Default for MeanAbsoluteDeviation {
     fn default() -> Self {
-        Self::new(Duration::days(9)).unwrap()
+        Self::new(Duration::days(14)).unwrap()
     }
 }
 

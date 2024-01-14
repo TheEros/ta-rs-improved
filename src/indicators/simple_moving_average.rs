@@ -70,7 +70,7 @@ impl Reset for SimpleMovingAverage {
 
 impl Default for SimpleMovingAverage {
     fn default() -> Self {
-        Self::new(Duration::days(9)).unwrap()
+        Self::new(Duration::days(14)).unwrap()
     }
 }
 
