@@ -19,6 +19,12 @@ pub use self::minimum::Minimum;
 mod maximum;
 pub use self::maximum::Maximum;
 
+mod max_drawdown;
+pub use self::max_drawdown::MaxDrawdown;
+
+mod max_drawup;
+pub use self::max_drawup::MaxDrawup;
+
 mod bollinger_bands;
 pub use self::bollinger_bands::{BollingerBands, BollingerBandsOutput};
 
