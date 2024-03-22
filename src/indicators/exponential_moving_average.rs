@@ -20,12 +20,12 @@ pub struct ExponentialMovingAverage {
 
 impl ExponentialMovingAverage {
     pub fn new(duration: Duration) -> Result<Self> {
-        if duration.num_seconds() == 0 {
+        if duration.num_days() == 0 {
             Err(TaError::InvalidParameter)
         } else {
             Ok(Self {
                 duration,
-                k: 2.0 / (duration.num_seconds() as f64 + 1.0),
+                k: 2.0 / (duration.num_days() as f64 + 1.0),
                 window: VecDeque::new(),
                 current: 0.0,
                 is_new: true,
