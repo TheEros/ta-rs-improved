@@ -89,31 +89,31 @@ mod tests {
 
     #[test]
     fn test_new() {
-        assert!(ExponentialMovingAverage::new(Duration::seconds(0)).is_err());
-        assert!(ExponentialMovingAverage::new(Duration::seconds(1)).is_ok());
+        assert!(ExponentialMovingAverage::new(Duration::days(0)).is_err());
+        assert!(ExponentialMovingAverage::new(Duration::days(1)).is_ok());
     }
 
     #[test]
     fn test_next() {
-        let mut ema = ExponentialMovingAverage::new(Duration::seconds(3)).unwrap();
+        let mut ema = ExponentialMovingAverage::new(Duration::days(3)).unwrap();
         let now = Utc::now();
 
         assert_eq!(ema.next((now, 2.0)), 2.0);
-        assert_eq!(ema.next((now + Duration::seconds(1), 5.0)), 3.5);
-        assert_eq!(ema.next((now + Duration::seconds(2), 1.0)), 2.25);
-        assert_eq!(ema.next((now + Duration::seconds(3), 6.25)), 4.25);
+        assert_eq!(ema.next((now + Duration::days(1), 5.0)), 3.5);
+        assert_eq!(ema.next((now + Duration::days(2), 1.0)), 2.25);
+        assert_eq!(ema.next((now + Duration::days(3), 6.25)), 4.25);
     }
 
     #[test]
     fn test_reset() {
-        let mut ema = ExponentialMovingAverage::new(Duration::seconds(5)).unwrap();
+        let mut ema = ExponentialMovingAverage::new(Duration::days(5)).unwrap();
         let now = Utc::now();
 
         assert_eq!(ema.next((now, 4.0)), 4.0);
-        ema.next((now + Duration::seconds(1), 10.0));
-        ema.next((now + Duration::seconds(2), 15.0));
-        ema.next((now + Duration::seconds(3), 20.0));
-        assert_ne!(ema.next((now + Duration::seconds(4), 4.0)), 4.0);
+        ema.next((now + Duration::days(1), 10.0));
+        ema.next((now + Duration::days(2), 15.0));
+        ema.next((now + Duration::days(3), 20.0));
+        assert_ne!(ema.next((now + Duration::days(4), 4.0)), 4.0);
 
         ema.reset();
         assert_eq!(ema.next((now, 4.0)), 4.0);
