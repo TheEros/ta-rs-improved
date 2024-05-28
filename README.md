@@ -9,6 +9,7 @@ Technical analysis library for Rust.
 - [Contributors](#contributors)
 
 ## Introduction
+
 This is ta-rs-improved, an improved version of the technical indicator library in Rust. There are two notable changes that makes this
 application improved.
 
@@ -20,8 +21,8 @@ This library is used to power [NexusTrade](https://nexustrade.io/), an AI-Powere
 For more information about this repository, [read the following article.](https://nexustrade.io/blog/i-used-an-ai-to-fix-a-major-bug-in-a-very-popular-open-source-technical-indicator-library-20231223)
 
 ## NexusTrade – AI-Powered Trading
-These indicators are implemented in [NexusTrade](https://nexustrade.io/). NexusTrade is an AI-Powered research platform that lets users create, test, optimize, and deploy algorithmic trading strategies. Try it now for free!
 
+These indicators are implemented in [NexusTrade](https://nexustrade.io/). NexusTrade is an AI-Powered algorithmic trading platform that lets users create, test, optimize, and deploy automated trading strategies. Try it now for free!
 
 ## Getting started
 
