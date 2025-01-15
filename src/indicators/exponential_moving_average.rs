@@ -25,7 +25,7 @@ impl ExponentialMovingAverage {
         } else {
             Ok(Self {
                 duration,
-                k: 2.0 / (duration.num_days() as f64 + 1.0),
+                k: 1.0 / (duration.num_days() as f64),
                 window: VecDeque::new(),
                 current: 0.0,
                 is_new: true,
